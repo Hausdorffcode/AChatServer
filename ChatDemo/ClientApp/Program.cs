@@ -28,11 +28,18 @@ namespace ClientApp
             try
             {
                 client.Connect(iped);
-                IPAddress localIp = MyNetworkLibrary.AddressHelper.GetLocalhostIPv4Addresses().First();
-                string msg = string.Format("客户端{0}发来贺电。", localIp);
-                
-                client.Send(Encoding.UTF8.GetBytes(msg));
-                client.Shutdown(SocketShutdown.Both);
+                while (true)
+                {
+                    int recv = client.Receive(data);
+                    Console.WriteLine(Encoding.UTF8.GetString(data, 0, recv));
+                    string msg = Console.ReadLine();
+                    client.Send(Encoding.UTF8.GetBytes(msg));
+                    if (msg == "exit")
+                    {
+                        client.Shutdown(SocketShutdown.Both);
+                        break;
+                    }
+                }
             }
             catch(SocketException e)
             {
