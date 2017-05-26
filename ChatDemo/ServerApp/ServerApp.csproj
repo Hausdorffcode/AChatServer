@@ -33,7 +33,8 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="MyNetworkLibrary">
+    <Reference Include="MyNetworkLibrary, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\..\python\c#金旭亮\4.2NetworkDemos\MyNetworkLibrary\bin\Debug\MyNetworkLibrary.dll</HintPath>
     </Reference>
     <Reference Include="System" />
@@ -48,6 +49,8 @@
   <ItemGroup>
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Server.cs" />
+    <Compile Include="ServerMessage.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
