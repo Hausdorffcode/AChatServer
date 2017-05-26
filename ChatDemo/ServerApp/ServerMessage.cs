@@ -13,7 +13,7 @@ namespace ServerApp
         /// The client sent a control message (a message starting with "/") 
         /// that doesn't exist (e.g., /foobar).
         public static string SERVER_INVALID_CONTROL_MESSAGE = 
-            "{} is not a valid control message. Valid messages are /create, /list, and /join.";
+            "{0} is not a valid control message. Valid messages are /create, /list, and /join.";
 
         /// Message returned when a client attempts to join a channel that doesn't exist.
         public static string SERVER_NO_CHANNEL_EXISTS =

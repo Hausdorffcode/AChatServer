@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -22,6 +23,7 @@ namespace ServerApp
     public class Server
     {
         //the structure store the info of the client
+        //多个线程并发访问此数据可能出错
         private Dictionary<Socket, ClientInfo> socketToClient = new Dictionary<Socket, ClientInfo>();
         private List<string> names = new List<string>();
         private Dictionary<string, List<Socket>> channelToSocket = new Dictionary<string, List<Socket>>();
@@ -35,7 +37,6 @@ namespace ServerApp
         public Server()
         {
             //get the IPEndPoint
-            //多个线程并发访问此数据可能出错
             IPAddress ipAddress = MyNetworkLibrary.AddressHelper.GetLocalhostIPv4Addresses().First();
             int endpoint = MyNetworkLibrary.AddressHelper.GetOneAvailablePortInLocalhost();
             ipep = new IPEndPoint(ipAddress, endpoint);
@@ -95,11 +96,31 @@ namespace ServerApp
                 if (msg == "" || msg[0] != '/')
                 {
                     Thread broadcastTh = new Thread(broadcast);
+                    msg = "[" + socketToClient[connectSocket].name + "] " + msg;
                     broadcastTh.Start(new BroadcastInfo(connectSocket, socketToClient[connectSocket].channel, msg));
                 }
                 else
                 {
-                    if (msg.Substring())
+                    //string[] order = Regex.Split(msg, )
+                    string[] order = msg.Split(' ');
+                    if (order[0] == "/join")
+                    {
+                        string channel = order[1];
+                        join(connectSocket, channel);
+                    }
+                    else if (order[0] == "/create")
+                    {
+                        string channel = order[1];
+                        create(connectSocket, channel);
+                    }
+                    else if (order[0] == "/list")
+                    {
+                        MyNetworkLibrary.SocketHelper.SendVarData(connectSocket, Encoding.UTF8.GetBytes(list()));
+                    }
+                    else
+                    {
+                        MyNetworkLibrary.SocketHelper.SendVarData(connectSocket, Encoding.UTF8.GetBytes(String.Format(ServerMessage.SERVER_INVALID_CONTROL_MESSAGE, msg)));
+                    }
                 }
                 
             }
@@ -136,7 +157,18 @@ namespace ServerApp
             string channel = bInfo.channel;
             string msg = bInfo.msg;
 
+            if (channel == "")
+            {
+                return;
+            }
 
+            foreach (var item in channelToSocket[channel])
+            {
+                if (item != s)
+                {
+                    MyNetworkLibrary.SocketHelper.SendVarData(item, Encoding.UTF8.GetBytes(msg));
+                }
+            }
         }
 
         /// <summary>
