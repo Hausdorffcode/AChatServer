@@ -28,8 +28,9 @@ namespace ServerApp
         private List<string> names = new List<string>();
         private Dictionary<string, List<Socket>> channelToSocket = new Dictionary<string, List<Socket>>();
 
-        private const int BufferSize = 1024;
-        private byte[] data;
+
+        //private const int BufferSize = 1024;
+        //private byte[] data;
         private Socket server;
         private IPEndPoint ipep;
 
@@ -41,7 +42,9 @@ namespace ServerApp
             int endpoint = MyNetworkLibrary.AddressHelper.GetOneAvailablePortInLocalhost();
             ipep = new IPEndPoint(ipAddress, endpoint);
 
-            data = new byte[BufferSize];
+            channelToSocket.Add("", new List<Socket>());
+
+            //data = new byte[BufferSize];
             server = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             server.Bind(ipep);
         }
@@ -59,6 +62,7 @@ namespace ServerApp
                         Socket connectionSocket = server.Accept();
                         //IPEndPoint cipep = (IPEndPoint)connectionSocket.RemoteEndPoint;
                         //Console.WriteLine("ip: {0}, port; {1} has connected.", cipep.Address, cipep.Port);
+
                         Thread th = new Thread(HandlerThreadMethod);
                         th.IsBackground = true;
                         th.Start(connectionSocket);
@@ -88,6 +92,11 @@ namespace ServerApp
             {
                 socketToClient.Add(connectSocket, new ClientInfo(name));
             }
+
+            names.Add(name);
+            //socketToClient.Add(connectSocket, new ClientInfo(name));
+            channelToSocket[""].Add(connectSocket);
+
             MyNetworkLibrary.SocketHelper.SendVarData(connectSocket, Encoding.UTF8.GetBytes(String.Format("Welcome {0}!", name)));
             while (true)
             {
