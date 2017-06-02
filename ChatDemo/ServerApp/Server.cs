@@ -24,6 +24,7 @@ namespace ServerApp
     {
         //the structure store the info of the client
         //多个线程并发访问此数据可能出错
+        //可以使用同步信号量
         private Dictionary<Socket, ClientInfo> socketToClient = new Dictionary<Socket, ClientInfo>();
         private List<string> names = new List<string>();
         private Dictionary<string, List<Socket>> channelToSocket = new Dictionary<string, List<Socket>>();
@@ -91,22 +92,36 @@ namespace ServerApp
             else
             {
                 socketToClient.Add(connectSocket, new ClientInfo(name));
+                names.Add(name);
+                channelToSocket[""].Add(connectSocket);
             }
-
-            names.Add(name);
-            //socketToClient.Add(connectSocket, new ClientInfo(name));
-            channelToSocket[""].Add(connectSocket);
-
             MyNetworkLibrary.SocketHelper.SendVarData(connectSocket, Encoding.UTF8.GetBytes(String.Format("Welcome {0}!", name)));
             while (true)
             {
-                recvData = MyNetworkLibrary.SocketHelper.ReceiveVarData(connectSocket);
+                try
+                {
+                    recvData = MyNetworkLibrary.SocketHelper.ReceiveVarData(connectSocket);
+                }
+                catch(Exception e)
+                {
+                    leave(connectSocket);
+                    exit(connectSocket);
+                    break;
+                }
                 string msg = Encoding.UTF8.GetString(recvData);
                 if (msg == "" || msg[0] != '/')
                 {
-                    Thread broadcastTh = new Thread(broadcast);
-                    msg = "[" + socketToClient[connectSocket].name + "] " + msg;
-                    broadcastTh.Start(new BroadcastInfo(connectSocket, socketToClient[connectSocket].channel, msg));
+
+                    if (socketToClient[connectSocket].channel == "")
+                    {
+                        MyNetworkLibrary.SocketHelper.SendVarData(connectSocket, Encoding.UTF8.GetBytes(ServerMessage.SERVER_CLIENT_NOT_IN_CHANNEL));
+                    }
+                    else
+                    {
+                        Thread broadcastTh = new Thread(broadcast);
+                        msg = "[" + socketToClient[connectSocket].name + "] " + msg;
+                        broadcastTh.Start(new BroadcastInfo(connectSocket, socketToClient[connectSocket].channel, msg));
+                    }   
                 }
                 else
                 {
@@ -114,17 +129,39 @@ namespace ServerApp
                     string[] order = msg.Split(' ');
                     if (order[0] == "/join")
                     {
-                        string channel = order[1];
-                        join(connectSocket, channel);
+                        if (order.Length == 1)
+                        {
+                            MyNetworkLibrary.SocketHelper.SendVarData(connectSocket, Encoding.UTF8.GetBytes(String.Format(ServerMessage.SERVER_JOIN_REQUIRES_ARGUMENT)));
+                        }
+                        else
+                        {
+                            string channel = order[1];
+                            join(connectSocket, channel);
+                        }
+                        
                     }
                     else if (order[0] == "/create")
                     {
-                        string channel = order[1];
-                        create(connectSocket, channel);
+                        if (order.Length == 1)
+                        {
+                            MyNetworkLibrary.SocketHelper.SendVarData(connectSocket, Encoding.UTF8.GetBytes(String.Format(ServerMessage.SERVER_CREATE_REQUIRES_ARGUMENT)));
+                        }
+                        else
+                        {
+                            string channel = order[1];
+                            create(connectSocket, channel);
+                        }
+                        
                     }
                     else if (order[0] == "/list")
                     {
                         MyNetworkLibrary.SocketHelper.SendVarData(connectSocket, Encoding.UTF8.GetBytes(list()));
+                    }
+                    else if (order[0] == "/exit")
+                    {
+                        leave(connectSocket);
+                        exit(connectSocket);
+                        break;
                     }
                     else
                     {
@@ -135,26 +172,83 @@ namespace ServerApp
             }
         }
 
+        private void exit(Socket s)
+        {
+            //clear data
+            string na = socketToClient[s].name;
+            string ch = socketToClient[s].channel;
+            this.names.Remove(na);
+            socketToClient.Remove(s);
+            channelToSocket[ch].Remove(s);
+
+            s.Shutdown(SocketShutdown.Both);
+            s.Close();
+        }
+
         private string list()
         {
             string str = "";
+            List<string> cha = new List<string>();
             foreach (var item in channelToSocket.Keys)
             {
-                str += item + Environment.NewLine;
+                if (item != "")
+                    cha.Add(item);
+            }
+            for (int i = 0; i < cha.Count; i++)
+            {
+                if (i != cha.Count-1)
+                {
+                    str += cha[i] + Environment.NewLine;
+                }
+                else
+                {
+                    str += cha[i];
+                }
             }
             return str;
         }
 
         private void join(Socket s, string channel)
         {
+            if (!channelToSocket.Keys.Contains(channel))
+            {
+                MyNetworkLibrary.SocketHelper.SendVarData(s, Encoding.UTF8.GetBytes(String.Format(ServerMessage.SERVER_NO_CHANNEL_EXISTS, channel)));
+                return;
+            }
             string oldChannel = socketToClient[s].channel;
+
+            //broadcast leave oldchannel
+            Thread broadcastTh = new Thread(broadcast);
+            broadcastTh.Start(new BroadcastInfo(s, oldChannel, string.Format(ServerMessage.SERVER_CLIENT_LEFT_CHANNEL, socketToClient[s].name)));
+
             socketToClient[s].channel = channel;
             channelToSocket[oldChannel].Remove(s);
             channelToSocket[channel].Add(s);
+
+            //broadcast join new channel
+            Thread broadcastTh2 = new Thread(broadcast);
+            broadcastTh2.Start(new BroadcastInfo(s, socketToClient[s].channel, string.Format(ServerMessage.SERVER_CLIENT_JOINED_CHANNEL, socketToClient[s].name)));
+        }
+
+        private void leave(Socket s)
+        {
+            string oldChannel = socketToClient[s].channel;
+
+            Thread broadcastTh = new Thread(broadcast);
+            broadcastTh.Start(new BroadcastInfo(s, oldChannel, string.Format(ServerMessage.SERVER_CLIENT_LEFT_CHANNEL, socketToClient[s].name)));
+
+            socketToClient[s].channel = "";
+            channelToSocket[oldChannel].Remove(s);
+            channelToSocket[""].Add(s);
         }
 
         private void create(Socket s, string channel)
         {
+            if (channelToSocket.Keys.Contains(channel))
+            {
+                MyNetworkLibrary.SocketHelper.SendVarData(s, Encoding.UTF8.GetBytes(String.Format(ServerMessage.SERVER_CHANNEL_EXISTS, channel)));
+                return;
+            }
             channelToSocket.Add(channel, new List<Socket>() { s });
             socketToClient[s].channel = channel;
         }
@@ -196,5 +290,4 @@ namespace ServerApp
             }
         }
     }
-
 }

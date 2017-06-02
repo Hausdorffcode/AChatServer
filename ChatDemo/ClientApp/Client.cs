@@ -33,6 +33,7 @@ namespace ClientApp
             try
             {
                 client.Connect(iped);
+                Console.Write("Please enter your name to login : ");
                 string name = Console.ReadLine();
                 MyNetworkLibrary.SocketHelper.SendVarData(client, Encoding.UTF8.GetBytes(name));
                 Console.Write(ClientMessage.CLIENT_MESSAGE_PREFIX);
@@ -44,7 +45,15 @@ namespace ClientApp
                 while (true)
                 {
                     string msg = Console.ReadLine();
-                    MyNetworkLibrary.SocketHelper.SendVarData(client, Encoding.UTF8.GetBytes(msg));
+                    try
+                    {
+                        MyNetworkLibrary.SocketHelper.SendVarData(client, Encoding.UTF8.GetBytes(msg));
+                    }
+                    catch(SocketException e)
+                    {
+                        Console.WriteLine(String.Format(ClientMessage.CLIENT_SERVER_DISCONNECTED, iped.Address, iped.Port));
+                        break;
+                    }
                     Console.Write(ClientMessage.CLIENT_MESSAGE_PREFIX);
                 }
 
@@ -69,7 +78,9 @@ namespace ClientApp
             while (true)
             {
                 byte[] data = MyNetworkLibrary.SocketHelper.ReceiveVarData(client);
-                string msg = ClientMessage.CLIENT_WIPE_ME + Encoding.UTF8.GetString(data);
+                string msg = ClientMessage.CLIENT_WIPE_ME + "\r" +  Encoding.UTF8.GetString(data);
+                
+                //client close bug
                 Console.WriteLine(msg);
                 Console.Write(ClientMessage.CLIENT_MESSAGE_PREFIX);
             }
