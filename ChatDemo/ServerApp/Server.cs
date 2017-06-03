@@ -24,14 +24,12 @@ namespace ServerApp
     {
         //the structure store the info of the client
         //多个线程并发访问此数据可能出错
-        //可以使用同步信号量
+        //可以使用互斥同步对象
         private Dictionary<Socket, ClientInfo> socketToClient = new Dictionary<Socket, ClientInfo>();
         private List<string> names = new List<string>();
         private Dictionary<string, List<Socket>> channelToSocket = new Dictionary<string, List<Socket>>();
+        private Mutex m = new Mutex();
 
-
-        //private const int BufferSize = 1024;
-        //private byte[] data;
         private Socket server;
         private IPEndPoint ipep;
 
@@ -39,8 +37,8 @@ namespace ServerApp
         public Server()
         {
             //get the IPEndPoint
-            IPAddress ipAddress = MyNetworkLibrary.AddressHelper.GetLocalhostIPv4Addresses().First();
-            int endpoint = MyNetworkLibrary.AddressHelper.GetOneAvailablePortInLocalhost();
+            IPAddress ipAddress = MyNetWorkLibrary.AddressHelper.GetLocalhostIPv4Addresses().First();
+            int endpoint = MyNetWorkLibrary.AddressHelper.GetOneAvailablePortInLocalhost();
             ipep = new IPEndPoint(ipAddress, endpoint);
 
             channelToSocket.Add("", new List<Socket>());
@@ -83,7 +81,7 @@ namespace ServerApp
         private void HandlerThreadMethod(object o)
         {
             Socket connectSocket = o as Socket;
-            byte[] recvData = MyNetworkLibrary.SocketHelper.ReceiveVarData(connectSocket);
+            byte[] recvData = MyNetWorkLibrary.SendAndRecvHelper.RecvVarData(connectSocket);
             string name = Encoding.UTF8.GetString(recvData);
             if (names.Contains(name))
             {
@@ -95,12 +93,12 @@ namespace ServerApp
                 names.Add(name);
                 channelToSocket[""].Add(connectSocket);
             }
-            MyNetworkLibrary.SocketHelper.SendVarData(connectSocket, Encoding.UTF8.GetBytes(String.Format("Welcome {0}!", name)));
+            MyNetWorkLibrary.SendAndRecvHelper.SendVarData(connectSocket, Encoding.UTF8.GetBytes(String.Format("Welcome {0}!", name)));
             while (true)
             {
                 try
                 {
-                    recvData = MyNetworkLibrary.SocketHelper.ReceiveVarData(connectSocket);
+                    recvData = MyNetWorkLibrary.SendAndRecvHelper.RecvVarData(connectSocket);
                 }
                 catch(Exception e)
                 {
@@ -114,7 +112,7 @@ namespace ServerApp
 
                     if (socketToClient[connectSocket].channel == "")
                     {
-                        MyNetworkLibrary.SocketHelper.SendVarData(connectSocket, Encoding.UTF8.GetBytes(ServerMessage.SERVER_CLIENT_NOT_IN_CHANNEL));
+                        MyNetWorkLibrary.SendAndRecvHelper.SendVarData(connectSocket, Encoding.UTF8.GetBytes(ServerMessage.SERVER_CLIENT_NOT_IN_CHANNEL));
                     }
                     else
                     {
@@ -131,7 +129,7 @@ namespace ServerApp
                     {
                         if (order.Length == 1)
                         {
-                            MyNetworkLibrary.SocketHelper.SendVarData(connectSocket, Encoding.UTF8.GetBytes(String.Format(ServerMessage.SERVER_JOIN_REQUIRES_ARGUMENT)));
+                            MyNetWorkLibrary.SendAndRecvHelper.SendVarData(connectSocket, Encoding.UTF8.GetBytes(String.Format(ServerMessage.SERVER_JOIN_REQUIRES_ARGUMENT)));
                         }
                         else
                         {
@@ -144,7 +142,7 @@ namespace ServerApp
                     {
                         if (order.Length == 1)
                         {
-                            MyNetworkLibrary.SocketHelper.SendVarData(connectSocket, Encoding.UTF8.GetBytes(String.Format(ServerMessage.SERVER_CREATE_REQUIRES_ARGUMENT)));
+                            MyNetWorkLibrary.SendAndRecvHelper.SendVarData(connectSocket, Encoding.UTF8.GetBytes(String.Format(ServerMessage.SERVER_CREATE_REQUIRES_ARGUMENT)));
                         }
                         else
                         {
@@ -155,17 +153,11 @@ namespace ServerApp
                     }
                     else if (order[0] == "/list")
                     {
-                        MyNetworkLibrary.SocketHelper.SendVarData(connectSocket, Encoding.UTF8.GetBytes(list()));
-                    }
-                    else if (order[0] == "/exit")
-                    {
-                        leave(connectSocket);
-                        exit(connectSocket);
-                        break;
+                        MyNetWorkLibrary.SendAndRecvHelper.SendVarData(connectSocket, Encoding.UTF8.GetBytes(list()));
                     }
                     else
                     {
-                        MyNetworkLibrary.SocketHelper.SendVarData(connectSocket, Encoding.UTF8.GetBytes(String.Format(ServerMessage.SERVER_INVALID_CONTROL_MESSAGE, msg)));
+                        MyNetWorkLibrary.SendAndRecvHelper.SendVarData(connectSocket, Encoding.UTF8.GetBytes(String.Format(ServerMessage.SERVER_INVALID_CONTROL_MESSAGE, msg)));
                     }
                 }
                 
@@ -174,12 +166,14 @@ namespace ServerApp
 
         private void exit(Socket s)
         {
+            m.WaitOne();
             //clear data
             string na = socketToClient[s].name;
             string ch = socketToClient[s].channel;
             this.names.Remove(na);
             socketToClient.Remove(s);
             channelToSocket[ch].Remove(s);
+            m.ReleaseMutex();
 
             s.Shutdown(SocketShutdown.Both);
             s.Close();
@@ -210,9 +204,10 @@ namespace ServerApp
 
         private void join(Socket s, string channel)
         {
+            m.WaitOne();
             if (!channelToSocket.Keys.Contains(channel))
             {
-                MyNetworkLibrary.SocketHelper.SendVarData(s, Encoding.UTF8.GetBytes(String.Format(ServerMessage.SERVER_NO_CHANNEL_EXISTS, channel)));
+                MyNetWorkLibrary.SendAndRecvHelper.SendVarData(s, Encoding.UTF8.GetBytes(String.Format(ServerMessage.SERVER_NO_CHANNEL_EXISTS, channel)));
                 return;
             }
             string oldChannel = socketToClient[s].channel;
@@ -228,10 +223,12 @@ namespace ServerApp
             //broadcast join new channel
             Thread broadcastTh2 = new Thread(broadcast);
             broadcastTh2.Start(new BroadcastInfo(s, socketToClient[s].channel, string.Format(ServerMessage.SERVER_CLIENT_JOINED_CHANNEL, socketToClient[s].name)));
+            m.ReleaseMutex();
         }
 
         private void leave(Socket s)
         {
+            m.WaitOne();
             string oldChannel = socketToClient[s].channel;
 
             Thread broadcastTh = new Thread(broadcast);
@@ -240,17 +237,20 @@ namespace ServerApp
             socketToClient[s].channel = "";
             channelToSocket[oldChannel].Remove(s);
             channelToSocket[""].Add(s);
+            m.ReleaseMutex();
         }
 
         private void create(Socket s, string channel)
         {
+            m.WaitOne();
             if (channelToSocket.Keys.Contains(channel))
             {
-                MyNetworkLibrary.SocketHelper.SendVarData(s, Encoding.UTF8.GetBytes(String.Format(ServerMessage.SERVER_CHANNEL_EXISTS, channel)));
+                MyNetWorkLibrary.SendAndRecvHelper.SendVarData(s, Encoding.UTF8.GetBytes(String.Format(ServerMessage.SERVER_CHANNEL_EXISTS, channel)));
                 return;
             }
             channelToSocket.Add(channel, new List<Socket>() { s });
             socketToClient[s].channel = channel;
+            m.ReleaseMutex();
         }
 
         private void broadcast(object o)
@@ -269,7 +269,7 @@ namespace ServerApp
             {
                 if (item != s)
                 {
-                    MyNetworkLibrary.SocketHelper.SendVarData(item, Encoding.UTF8.GetBytes(msg));
+                    MyNetWorkLibrary.SendAndRecvHelper.SendVarData(item, Encoding.UTF8.GetBytes(msg));
                 }
             }
         }

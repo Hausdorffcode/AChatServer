@@ -11,8 +11,7 @@ namespace ClientApp
 {
     public class Client
     {
-        //private const int BufferSize = 1024;
-        //byte[] data = new byte[BufferSize];
+
         IPEndPoint iped = null;
         Socket client;
 
@@ -20,7 +19,7 @@ namespace ClientApp
         {
             while (true)
             {
-                iped = MyNetworkLibrary.AddressHelper.GetRemoteMachineIPEndPoint();
+                iped = MyNetWorkLibrary.AddressHelper.GetRemoteMachineIPEndPoint();
                 if (iped != null)
                     break;
             }
@@ -33,9 +32,9 @@ namespace ClientApp
             try
             {
                 client.Connect(iped);
-                Console.Write("Please enter your name to login : ");
+                Console.Write("Please enter your name to login in: ");
                 string name = Console.ReadLine();
-                MyNetworkLibrary.SocketHelper.SendVarData(client, Encoding.UTF8.GetBytes(name));
+                MyNetWorkLibrary.SendAndRecvHelper.SendVarData(client, Encoding.UTF8.GetBytes(name));
                 Console.Write(ClientMessage.CLIENT_MESSAGE_PREFIX);
 
                 Thread th = new Thread(RecvHelperMethod);
@@ -47,7 +46,7 @@ namespace ClientApp
                     string msg = Console.ReadLine();
                     try
                     {
-                        MyNetworkLibrary.SocketHelper.SendVarData(client, Encoding.UTF8.GetBytes(msg));
+                        MyNetWorkLibrary.SendAndRecvHelper.SendVarData(client, Encoding.UTF8.GetBytes(msg));
                     }
                     catch(SocketException e)
                     {
@@ -68,7 +67,6 @@ namespace ClientApp
                 client.Shutdown(SocketShutdown.Both);
                 client.Close();
             }
-            Console.WriteLine("消息发送完毕，断开与服务端的连接。");
             Console.WriteLine("敲任意键退出...");
             Console.ReadKey();
         }
@@ -77,11 +75,18 @@ namespace ClientApp
         {
             while (true)
             {
-                byte[] data = MyNetworkLibrary.SocketHelper.ReceiveVarData(client);
-                string msg = ClientMessage.CLIENT_WIPE_ME + "\r" +  Encoding.UTF8.GetString(data);
-                
-                //client close bug
-                Console.WriteLine(msg);
+                try
+                {
+                    byte[] data = MyNetWorkLibrary.SendAndRecvHelper.RecvVarData(client);
+                    string msg = ClientMessage.CLIENT_WIPE_ME + "\r" + Encoding.UTF8.GetString(data);
+
+                    Console.WriteLine(msg);
+                }
+                catch (SocketException e)
+                {
+                    Console.WriteLine(String.Format(ClientMessage.CLIENT_SERVER_DISCONNECTED, iped.Address, iped.Port));
+                    break;
+                }
                 Console.Write(ClientMessage.CLIENT_MESSAGE_PREFIX);
             }
         }

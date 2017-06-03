@@ -39,22 +39,22 @@ namespace MyNetWorkLibrary
             IPEndPoint iep = null;
             try
             {
-                Console.Write("请输入远程主机的IP地址：");
+                Console.Write("Please enter the server ip：");
                 IPAddress address = IPAddress.Parse(Console.ReadLine());
-                Console.Write("请输入远程主机打开的端口号：");
+                Console.Write("Please enter the server port：");
                 int port = Convert.ToInt32(Console.ReadLine());
                 if (port > 65535 || port < 1024)
-                    throw new Exception("端口号应该为[1024,65535]范围内的整数");
+                    throw new Exception("The port should be integer in [1024,65535]");
                 iep = new IPEndPoint(address, port);
 
             }
             catch (ArgumentNullException)
             {
-                Console.WriteLine("输入的数据有误！");
+                Console.WriteLine("Data error!");
             }
             catch (FormatException)
             {
-                Console.WriteLine("输入的数据有误！");
+                Console.WriteLine("Data error!");
             }
 
             catch (Exception ex)

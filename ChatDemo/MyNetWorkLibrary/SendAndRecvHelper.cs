@@ -15,22 +15,30 @@ namespace MyNetWorkLibrary
         public static byte[] RecvVarData(Socket s)
         {
             byte[] dataSize = new byte[4];
-            s.Receive(dataSize, 0, 4, SocketFlags.None);
-            int len = BitConverter.ToInt32(dataSize, 0);
-
-            byte[] data = new byte[len];
-            int dataleft = len;
-            int totalRecv = 0;
-            int recv = 0;
-            while (dataleft > 0)
+            byte[] data;
+            try
             {
-                recv = s.Receive(data, totalRecv, dataleft, SocketFlags.None);
-                if (recv == 0)
-                {//when recv == 0, it means the connection have been closed
-                    break;
+                s.Receive(dataSize, 0, 4, SocketFlags.None);
+                int len = BitConverter.ToInt32(dataSize, 0);
+
+                data = new byte[len];
+                int dataleft = len;
+                int totalRecv = 0;
+                int recv = 0;
+                while (dataleft > 0)
+                {
+                    recv = s.Receive(data, totalRecv, dataleft, SocketFlags.None);
+                    if (recv == 0)
+                    {//when recv == 0, it means the connection have been closed
+                        break;
+                    }
+                    dataleft -= recv;
+                    totalRecv += recv;
                 }
-                dataleft -= recv;
-                totalRecv += recv;
+            }
+            catch(SocketException e)
+            {
+                throw e;
             }
             return data;
         }
@@ -45,14 +53,22 @@ namespace MyNetWorkLibrary
             int sent = 0;       //the length of every time the data be sent
             int dataleft = len; //the data to be sent
 
-            sent = s.Send(BitConverter.GetBytes(len)); //send the length of data first
-
-            while (dataleft > 0)
+            try
             {
-                sent = s.Send(data, totalsent, dataleft, SocketFlags.None);
-                totalsent += sent;
-                dataleft -= sent;
+                sent = s.Send(BitConverter.GetBytes(len)); //send the length of data first
+
+                while (dataleft > 0)
+                {
+                    sent = s.Send(data, totalsent, dataleft, SocketFlags.None);
+                    totalsent += sent;
+                    dataleft -= sent;
+                }
             }
+            catch (SocketException e)
+            {
+                throw e;
+            }
+            
             return totalsent;
         }
     }
